@@ -119,10 +119,15 @@ func TestBufferDeleteRange(t *testing.T) {
 func TestBufferTabRendering(t *testing.T) {
 	buf := newBuffer("Line\twith\ttabs")
 
-	assert.False(t, strings.Contains(buf.text(), "\t"), "Buffer content should not contain literal tabs")
+	// We now preserve tabs in the buffer
+	assert.True(t, strings.Contains(buf.text(), "\t"), "Buffer content should contain literal tabs")
 
+	// Check visual length calculation
 	line := buf.Line(0)
-	assert.Contains(t, line, "    ", "Line should contain spaces replacing tabs")
+	assert.Contains(t, line, "\t", "Line should contain tab characters")
+	
+	// Visual length with 4-space tabs should be greater than buffer length
+	assert.Greater(t, buf.visualLineLength(0), len(line), "Visual line length should be greater than buffer line length")
 }
 
 func TestBufferReplaceContent(t *testing.T) {

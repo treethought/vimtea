@@ -272,8 +272,8 @@ func handleInsertTab(model *editorModel) tea.Cmd {
 
 	line := model.buffer.Line(model.cursor.Row)
 	newLine := line[:model.cursor.Col] + "\t" + line[model.cursor.Col:]
-	model.buffer.setLine(model.cursor.Row, renderTabs(newLine))
-	model.cursor.Col += 4
+	model.buffer.setLine(model.cursor.Row, newLine)
+	model.cursor.Col += 1
 	return nil
 }
 
