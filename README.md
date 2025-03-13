@@ -6,6 +6,8 @@ VimTea is a lightweight, Vim-inspired text editor for the terminal, built with G
 [![Go Report Card](https://goreportcard.com/badge/github.com/kujtimiihoxha/vimtea)](https://goreportcard.com/report/github.com/kujtimiihoxha/vimtea)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+![VimTea Demo](./assets/demo.gif)
+
 ## Features
 
 - Multiple editing modes (Normal, Insert, Visual, Command)
