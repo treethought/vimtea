@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -12,6 +13,69 @@ import (
 // Regular expression for matching ANSI escape sequences
 // Used to correctly calculate visible text length with syntax highlighting
 var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// renderTab renders a tab character with visual representation using spaces
+func renderTab(col int) string {
+	spaces := tabWidth - (col % tabWidth)
+	return strings.Repeat(" ", spaces)
+}
+
+// visualLength calculates the visual length of a string, counting tabs as tabWidth spaces
+func visualLength(s string, startCol int) int {
+	length := 0
+	for _, r := range s {
+		if r == '\t' {
+			// Tab advances to the next tab stop
+			spaces := tabWidth - ((startCol + length) % tabWidth)
+			length += spaces
+		} else {
+			length++
+		}
+	}
+	return length
+}
+
+// bufferToVisualPosition converts a buffer position to a visual position
+// This accounts for tabs that visually occupy multiple columns
+func bufferToVisualPosition(line string, bufferCol int) int {
+	if bufferCol > len(line) {
+		bufferCol = len(line)
+	}
+
+	visualCol := 0
+	for i, r := range line {
+		if i >= bufferCol {
+			break
+		}
+
+		if r == '\t' {
+			spaces := tabWidth - (visualCol % tabWidth)
+			visualCol += spaces
+		} else {
+			visualCol++
+		}
+	}
+	return visualCol
+}
+
+// renderLineWithTabs renders a line with proper tab expansion
+func renderLineWithTabs(line string) string {
+	var sb strings.Builder
+	visualCol := 0
+
+	for _, r := range line {
+		if r == '\t' {
+			spaces := tabWidth - (visualCol % tabWidth)
+			sb.WriteString(strings.Repeat(" ", spaces))
+			visualCol += spaces
+		} else {
+			sb.WriteRune(r)
+			visualCol++
+		}
+	}
+
+	return sb.String()
+}
 
 // View renders the editor and returns it as a string
 // This is part of the bubbletea.Model interface
@@ -61,19 +125,21 @@ func (m *editorModel) renderContent() string {
 }
 
 func (m *editorModel) renderLine(line string, rowIdx int, inVisualSelection bool, selStart, selEnd Cursor) string {
+	displayLine := renderLineWithTabs(line)
+
 	if m.mode == ModeVisual && m.isVisualLine && inVisualSelection {
-		return m.selectedStyle.Render(line)
+		return m.selectedStyle.Render(displayLine)
 	}
 
 	if m.mode != ModeVisual && m.yankHighlight.Active && m.isLineInYankHighlight(rowIdx) {
 		return m.renderLineWithYankHighlight(line, rowIdx)
 	}
 
-	var displayedLine string
+	var highlightedLine string
 	if m.highlighter != nil && m.highlighter.enabled {
-		displayedLine = m.highlighter.HighlightLine(line)
+		highlightedLine = m.highlighter.HighlightLine(displayLine)
 	} else {
-		displayedLine = line
+		highlightedLine = displayLine
 	}
 
 	if rowIdx == m.cursor.Row {
@@ -85,15 +151,15 @@ func (m *editorModel) renderLine(line string, rowIdx int, inVisualSelection bool
 		}
 
 		if m.cursor.Col >= len(line) {
-			return displayedLine + m.renderCursor(" ")
+			return highlightedLine + m.renderCursor(" ")
 		}
 
 		if m.mode == ModeVisual && !m.isVisualLine && inVisualSelection {
 			return m.renderLineWithCursorInVisualSelection(line, rowIdx, selStart, selEnd)
 		}
 
-		if m.highlighter != nil && m.highlighter.enabled && line != displayedLine {
-			return m.renderSyntaxHighlightedCursorLine(displayedLine, line)
+		if m.highlighter != nil && m.highlighter.enabled && displayLine != highlightedLine {
+			return m.renderSyntaxHighlightedCursorLine(highlightedLine, line)
 		}
 
 		return m.renderRegularCursorLine(line)
@@ -103,7 +169,7 @@ func (m *editorModel) renderLine(line string, rowIdx int, inVisualSelection bool
 		return m.renderLineInVisualSelection(line, rowIdx, selStart, selEnd)
 	}
 
-	return displayedLine
+	return highlightedLine
 }
 
 func (m *editorModel) renderCursor(char string) string {
@@ -147,31 +213,101 @@ func abs(n int) int {
 
 func (m *editorModel) renderRegularCursorLine(line string) string {
 	var sb strings.Builder
+	visualCol := 0
 
-	sb.WriteString(line[:m.cursor.Col])
+	// Process characters up to the cursor position
+	for i, r := range line {
+		if i >= m.cursor.Col {
+			break
+		}
 
-	cursorChar := string(line[m.cursor.Col])
-	sb.WriteString(m.renderCursor(cursorChar))
+		if r == '\t' {
+			spaces := tabWidth - (visualCol % tabWidth)
+			sb.WriteString(strings.Repeat(" ", spaces))
+			visualCol += spaces
+		} else {
+			sb.WriteRune(r)
+			visualCol++
+		}
+	}
 
+	// Handle cursor character
+	if m.cursor.Col < len(line) {
+		cursorRune, _ := utf8.DecodeRuneInString(line[m.cursor.Col:])
+		if cursorRune == '\t' {
+			// For tab, just highlight the first space
+			sb.WriteString(m.renderCursor(" "))
+
+			// Write the remaining spaces
+			spaces := tabWidth - 1 - (visualCol % tabWidth)
+			if spaces > 0 {
+				sb.WriteString(strings.Repeat(" ", spaces))
+			}
+			visualCol += tabWidth - (visualCol % tabWidth)
+		} else {
+			sb.WriteString(m.renderCursor(string(cursorRune)))
+			visualCol++
+		}
+	} else {
+		// Cursor at end of line
+		sb.WriteString(m.renderCursor(" "))
+		visualCol++
+	}
+
+	// Process remaining characters after cursor
 	if m.cursor.Col < len(line)-1 {
-		sb.WriteString(line[m.cursor.Col+1:])
+		for _, r := range line[m.cursor.Col+1:] {
+			if r == '\t' {
+				spaces := tabWidth - (visualCol % tabWidth)
+				sb.WriteString(strings.Repeat(" ", spaces))
+				visualCol += spaces
+			} else {
+				sb.WriteRune(r)
+				visualCol++
+			}
+		}
 	}
 
 	return sb.String()
 }
 
 func (m *editorModel) renderSyntaxHighlightedCursorLine(highlightedLine, plainLine string) string {
-	plainRunes := []rune(plainLine)
-	cursorIdx := m.cursor.Col
+	// For syntax highlighting with tabs, we need to:
+	// 1. Render the plain line with proper tab expansion
+	// 2. Apply cursor highlighting at the correct position
 
-	if cursorIdx >= len(plainRunes) {
+	// If the cursor is at the end, just append it
+	if m.cursor.Col >= len(plainLine) {
 		return highlightedLine + m.renderCursor(" ")
 	}
 
+	// Calculate the visual position of the cursor
+	visualCursorPos := bufferToVisualPosition(plainLine, m.cursor.Col)
+
+	// Get the character at the cursor position
+	var cursorChar string
+	if m.cursor.Col < len(plainLine) {
+		if plainLine[m.cursor.Col] == '\t' {
+			cursorChar = " " // Show first space of tab
+		} else {
+			cursorChar = string(plainLine[m.cursor.Col])
+		}
+	} else {
+		cursorChar = " "
+	}
+
+	// If we're dealing with a tab at cursor position, we need special handling
+	if m.cursor.Col < len(plainLine) && plainLine[m.cursor.Col] == '\t' {
+		return m.renderRegularCursorLine(plainLine)
+	}
+
+	// For non-tab characters, we can try to locate the cursor position in the highlighted line
+	// Find all ANSI escape sequences in the highlighted line
 	ansiMatches := ansiRegex.FindAllStringIndex(highlightedLine, -1)
 
-	plainToHighlighted := make(map[int]int)
-	plainIdx := 0
+	// Match the visual position in the highlighted line
+	visibleIdx := 0
+	cursorHighlightPos := -1
 
 	for i := 0; i < len(highlightedLine); {
 		isAnsi := false
@@ -187,35 +323,43 @@ func (m *editorModel) renderSyntaxHighlightedCursorLine(highlightedLine, plainLi
 			continue
 		}
 
-		plainToHighlighted[plainIdx] = i
-		plainIdx++
+		if visibleIdx == visualCursorPos {
+			cursorHighlightPos = i
+			break
+		}
+
+		visibleIdx++
 		i++
 	}
 
-	highlightedCursorPos, exists := plainToHighlighted[cursorIdx]
-	if !exists {
+	// If we couldn't find the cursor position in the highlighted output,
+	// fall back to regular cursor line rendering
+	if cursorHighlightPos == -1 {
 		return m.renderRegularCursorLine(plainLine)
 	}
 
+	// Extract ANSI codes that should be active before the cursor
 	var ansiBeforeCursor string
 	for _, match := range ansiMatches {
-		if match[0] < highlightedCursorPos {
+		if match[0] < cursorHighlightPos {
 			ansiBeforeCursor += highlightedLine[match[0]:match[1]]
 		}
 	}
 
+	// Build the final output with the cursor properly highlighted
 	var sb strings.Builder
-	sb.WriteString(highlightedLine[:highlightedCursorPos])
-	sb.WriteString("\x1b[0m")
+	sb.WriteString(highlightedLine[:cursorHighlightPos])
+	sb.WriteString("\x1b[0m") // Reset all ANSI formatting
 
-	cursorChar := string(plainRunes[cursorIdx])
 	sb.WriteString(m.renderCursor(cursorChar))
 
+	// Restore ANSI formatting for text after the cursor
 	sb.WriteString(ansiBeforeCursor)
 
-	if highlightedCursorPos+1 < len(highlightedLine) {
-		afterCursorStart := highlightedCursorPos + 1
+	if cursorHighlightPos+1 < len(highlightedLine) {
+		afterCursorStart := cursorHighlightPos + 1
 
+		// Skip any ANSI sequences immediately after the cursor
 		for _, match := range ansiMatches {
 			if afterCursorStart >= match[0] && afterCursorStart < match[1] {
 				afterCursorStart = match[1]
@@ -231,7 +375,9 @@ func (m *editorModel) renderSyntaxHighlightedCursorLine(highlightedLine, plainLi
 
 func (m *editorModel) renderLineWithCursorInVisualSelection(line string, rowIdx int, selStart, selEnd Cursor) string {
 	var sb strings.Builder
+	// Pre-rendered version of the line with tabs expanded (used for reference)
 
+	// Get selection boundaries in buffer coordinates
 	selBegin := 0
 	if rowIdx == selStart.Row {
 		selBegin = selStart.Col
@@ -242,32 +388,73 @@ func (m *editorModel) renderLineWithCursorInVisualSelection(line string, rowIdx 
 		selEndCol = selEnd.Col + 1
 	}
 
-	if rowIdx == selStart.Row && selStart.Col > 0 {
-		sb.WriteString(line[:selStart.Col])
-	}
-
-	if m.cursor.Col >= selBegin && m.cursor.Col < selEndCol {
-
-		if m.cursor.Col > selBegin {
-			sb.WriteString(m.selectedStyle.Render(line[selBegin:m.cursor.Col]))
+	// Process the line with proper tab rendering
+	curVisualPos := 0
+	for i, r := range line {
+		// Handle character before selection start
+		if i < selBegin {
+			if r == '\t' {
+				spaces := tabWidth - (curVisualPos % tabWidth)
+				sb.WriteString(strings.Repeat(" ", spaces))
+				curVisualPos += spaces
+			} else {
+				sb.WriteRune(r)
+				curVisualPos++
+			}
+			continue
 		}
 
-		cursorChar := string(line[m.cursor.Col])
-		if m.cursorBlink {
-			sb.WriteString(m.cursorStyle.Render(cursorChar))
+		// Handle cursor character
+		if i == m.cursor.Col {
+			// Get appropriate character display
+			var cursorChar string
+			if r == '\t' {
+				cursorChar = " " // Show first space of tab
+			} else {
+				cursorChar = string(r)
+			}
+
+			if m.cursorBlink {
+				sb.WriteString(m.cursorStyle.Render(cursorChar))
+			} else {
+				sb.WriteString(m.selectedStyle.Render(cursorChar))
+			}
+
+			// Handle remaining spaces for tab
+			if r == '\t' {
+				spaces := tabWidth - 1 - (curVisualPos % tabWidth)
+				if spaces > 0 {
+					sb.WriteString(m.selectedStyle.Render(strings.Repeat(" ", spaces)))
+				}
+				curVisualPos += tabWidth - (curVisualPos % tabWidth)
+			} else {
+				curVisualPos++
+			}
+			continue
+		}
+
+		// Handle selection (non-cursor)
+		if i < selEndCol {
+			if r == '\t' {
+				spaces := tabWidth - (curVisualPos % tabWidth)
+				sb.WriteString(m.selectedStyle.Render(strings.Repeat(" ", spaces)))
+				curVisualPos += spaces
+			} else {
+				sb.WriteString(m.selectedStyle.Render(string(r)))
+				curVisualPos++
+			}
+			continue
+		}
+
+		// Handle character after selection end
+		if r == '\t' {
+			spaces := tabWidth - (curVisualPos % tabWidth)
+			sb.WriteString(strings.Repeat(" ", spaces))
+			curVisualPos += spaces
 		} else {
-			sb.WriteString(m.selectedStyle.Render(cursorChar))
+			sb.WriteRune(r)
+			curVisualPos++
 		}
-
-		if m.cursor.Col+1 < selEndCol {
-			sb.WriteString(m.selectedStyle.Render(line[m.cursor.Col+1 : selEndCol]))
-		}
-	} else {
-		sb.WriteString(m.selectedStyle.Render(line[selBegin:selEndCol]))
-	}
-
-	if selEndCol < len(line) {
-		sb.WriteString(line[selEndCol:])
 	}
 
 	return sb.String()
@@ -276,6 +463,7 @@ func (m *editorModel) renderLineWithCursorInVisualSelection(line string, rowIdx 
 func (m *editorModel) renderLineInVisualSelection(line string, rowIdx int, selStart, selEnd Cursor) string {
 	var sb strings.Builder
 
+	// Get selection boundaries in buffer coordinates
 	selBegin := 0
 	if rowIdx == selStart.Row {
 		selBegin = selStart.Col
@@ -286,14 +474,44 @@ func (m *editorModel) renderLineInVisualSelection(line string, rowIdx int, selSt
 		selEndCol = selEnd.Col + 1
 	}
 
-	if selBegin > 0 {
-		sb.WriteString(line[:selBegin])
-	}
+	// Process the line with proper tab rendering
+	curVisualPos := 0
+	for i, r := range line {
+		// Handle character before selection start
+		if i < selBegin {
+			if r == '\t' {
+				spaces := tabWidth - (curVisualPos % tabWidth)
+				sb.WriteString(strings.Repeat(" ", spaces))
+				curVisualPos += spaces
+			} else {
+				sb.WriteRune(r)
+				curVisualPos++
+			}
+			continue
+		}
 
-	sb.WriteString(m.selectedStyle.Render(line[selBegin:min(selEndCol, len(line))]))
+		// Handle selection
+		if i < selEndCol {
+			if r == '\t' {
+				spaces := tabWidth - (curVisualPos % tabWidth)
+				sb.WriteString(m.selectedStyle.Render(strings.Repeat(" ", spaces)))
+				curVisualPos += spaces
+			} else {
+				sb.WriteString(m.selectedStyle.Render(string(r)))
+				curVisualPos++
+			}
+			continue
+		}
 
-	if selEndCol < len(line) {
-		sb.WriteString(line[selEndCol:])
+		// Handle character after selection end
+		if r == '\t' {
+			spaces := tabWidth - (curVisualPos % tabWidth)
+			sb.WriteString(strings.Repeat(" ", spaces))
+			curVisualPos += spaces
+		} else {
+			sb.WriteRune(r)
+			curVisualPos++
+		}
 	}
 
 	return sb.String()
@@ -375,41 +593,83 @@ func (m *editorModel) getYankHighlightBounds(rowIdx int) (int, int) {
 
 func (m *editorModel) renderLineWithYankHighlight(line string, rowIdx int) string {
 	var sb strings.Builder
+	highlightStyle := lipgloss.NewStyle().Background(lipgloss.Color("7"))
 
 	start, end := m.getYankHighlightBounds(rowIdx)
 	if start < 0 || end < 0 {
-		return line
+		return renderLineWithTabs(line)
 	}
 
 	start = max(0, min(start, len(line)))
 	end = max(0, min(end, len(line)))
 
-	if start > 0 {
-		sb.WriteString(line[:start])
-	}
-
-	if rowIdx == m.cursor.Row && m.cursor.Col >= start && m.cursor.Col < end {
-
-		if m.cursor.Col > start {
-			sb.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("7")).Render(line[start:m.cursor.Col]))
+	// Process the line with proper tab rendering
+	curVisualPos := 0
+	for i, r := range line {
+		// Handle character before highlight start
+		if i < start {
+			if r == '\t' {
+				spaces := tabWidth - (curVisualPos % tabWidth)
+				sb.WriteString(strings.Repeat(" ", spaces))
+				curVisualPos += spaces
+			} else {
+				sb.WriteRune(r)
+				curVisualPos++
+			}
+			continue
 		}
 
-		cursorChar := string(line[m.cursor.Col])
-		if m.cursorBlink {
-			sb.WriteString(m.cursorStyle.Render(cursorChar))
+		// Handle cursor character within highlight
+		if i == m.cursor.Col && rowIdx == m.cursor.Row && i >= start && i < end {
+			// Get appropriate character display
+			var cursorChar string
+			if r == '\t' {
+				cursorChar = " " // Show first space of tab
+			} else {
+				cursorChar = string(r)
+			}
+
+			if m.cursorBlink {
+				sb.WriteString(m.cursorStyle.Render(cursorChar))
+			} else {
+				sb.WriteString(highlightStyle.Render(cursorChar))
+			}
+
+			// Handle remaining spaces for tab
+			if r == '\t' {
+				spaces := tabWidth - 1 - (curVisualPos % tabWidth)
+				if spaces > 0 {
+					sb.WriteString(highlightStyle.Render(strings.Repeat(" ", spaces)))
+				}
+				curVisualPos += tabWidth - (curVisualPos % tabWidth)
+			} else {
+				curVisualPos++
+			}
+			continue
+		}
+
+		// Handle highlighted character (non-cursor)
+		if i < end {
+			if r == '\t' {
+				spaces := tabWidth - (curVisualPos % tabWidth)
+				sb.WriteString(highlightStyle.Render(strings.Repeat(" ", spaces)))
+				curVisualPos += spaces
+			} else {
+				sb.WriteString(highlightStyle.Render(string(r)))
+				curVisualPos++
+			}
+			continue
+		}
+
+		// Handle character after highlight end
+		if r == '\t' {
+			spaces := tabWidth - (curVisualPos % tabWidth)
+			sb.WriteString(strings.Repeat(" ", spaces))
+			curVisualPos += spaces
 		} else {
-			sb.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("7")).Render(cursorChar))
+			sb.WriteRune(r)
+			curVisualPos++
 		}
-
-		if m.cursor.Col+1 < end {
-			sb.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("7")).Render(line[m.cursor.Col+1 : end]))
-		}
-	} else {
-		sb.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("7")).Render(line[start:end]))
-	}
-
-	if end < len(line) {
-		sb.WriteString(line[end:])
 	}
 
 	return sb.String()

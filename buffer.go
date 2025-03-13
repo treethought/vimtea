@@ -23,6 +23,10 @@ type Buffer interface {
 	// LineLength returns the length of the line at the given row
 	LineLength(row int) int
 
+	// VisualLineLength returns the visual length of the line at the given row
+	// counting tabs as tabWidth spaces
+	VisualLineLength(row int) int
+
 	// InsertAt inserts text at the specified position
 	InsertAt(row, col int, text string)
 
@@ -61,19 +65,12 @@ type TextRange struct {
 	End   Cursor // Ending position (inclusive)
 }
 
-// renderTabs converts tab characters to spaces for consistent display
-func renderTabs(line string) string {
-	tabWidth := 4
-	return strings.ReplaceAll(line, "\t", strings.Repeat(" ", tabWidth))
-}
+// tabWidth defines the visual width of a tab character
+const tabWidth = 4
 
 // newBuffer creates a new buffer with the given content
-// Tabs in the content are converted to spaces for consistent display
 func newBuffer(content string) *buffer {
 	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		lines[i] = renderTabs(line)
-	}
 	return &buffer{
 		lines:     lines,
 		undoStack: []bufferState{},
@@ -107,6 +104,15 @@ func (b *buffer) lineLength(idx int) int {
 		return 0
 	}
 	return len(b.lines[idx])
+}
+
+// visualLineLength returns the visual length of the line, counting tabs as tabWidth spaces
+// Returns 0 if the index is out of bounds
+func (b *buffer) visualLineLength(idx int) int {
+	if idx < 0 || idx >= len(b.lines) {
+		return 0
+	}
+	return visualLength(b.lines[idx], 0)
 }
 
 // setLine replaces the line at the given index with new content
@@ -162,7 +168,6 @@ func (b *buffer) deleteLine(idx int) string {
 // insertAt inserts text at the specified position
 // Handles both single line and multiline inserts
 func (b *buffer) insertAt(row, col int, text string) {
-	text = renderTabs(text)
 	if row < 0 || row >= len(b.lines) {
 		return
 	}

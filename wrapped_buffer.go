@@ -30,6 +30,12 @@ func (w *wrappedBuffer) LineLength(row int) int {
 	return w.m.buffer.lineLength(row)
 }
 
+// VisualLineLength returns the visual length of the line at the given row
+// This accounts for tabs which visually occupy multiple spaces
+func (w *wrappedBuffer) VisualLineLength(row int) int {
+	return w.m.buffer.visualLineLength(row)
+}
+
 // InsertAt inserts text at the specified position
 func (w *wrappedBuffer) InsertAt(row int, col int, text string) {
 	w.m.buffer.saveUndoState(w.m.cursor)
