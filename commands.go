@@ -110,6 +110,7 @@ func registerBindings(m *editorModel) {
 
 	m.registry.Add("esc", exitModeInsert, ModeInsert, "Exit insert mode")
 	m.registry.Add("backspace", handleInsertBackspace, ModeInsert, "Backspace")
+	m.registry.Add("tab", handleInsertTab, ModeInsert, "Tab")
 	m.registry.Add("enter", handleInsertEnterKey, ModeInsert, "Enter")
 	m.registry.Add("up", handleArrowKeys("up"), ModeInsert, "Move cursor up")
 	m.registry.Add("down", handleArrowKeys("down"), ModeInsert, "Move cursor down")
@@ -263,6 +264,16 @@ func handleInsertBackspace(model *editorModel) tea.Cmd {
 		model.cursor.Row--
 		model.cursor.Col = prevLineLen
 	}
+	return nil
+}
+
+func handleInsertTab(model *editorModel) tea.Cmd {
+	model.buffer.saveUndoState(model.cursor)
+
+	line := model.buffer.Line(model.cursor.Row)
+	newLine := line[:model.cursor.Col] + "\t" + line[model.cursor.Col:]
+	model.buffer.setLine(model.cursor.Row, renderTabs(newLine))
+	model.cursor.Col += 4
 	return nil
 }
 
