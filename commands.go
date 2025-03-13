@@ -563,25 +563,80 @@ func pasteAfter(model *editorModel) tea.Cmd {
 
 	model.buffer.saveUndoState(model.cursor)
 
+	// Line-wise paste
 	if strings.HasPrefix(model.yankBuffer, "\n") {
 		return pasteLineAfter(model)
 	}
 
+	// Character-wise paste
 	currLine := model.buffer.Line(model.cursor.Row)
 	insertPos := model.cursor.Col
 
-	if insertPos >= len(currLine) {
-		model.buffer.setLine(model.cursor.Row, currLine+model.yankBuffer)
+	// Check if the yanked text contains newlines (multi-line character-wise yank)
+	if strings.Contains(model.yankBuffer, "\n") {
+		// Split the yanked text by newlines
+		lines := strings.Split(model.yankBuffer, "\n")
+		
+		// Handle the first line - insert at cursor position in current line
+		firstLine := lines[0]
+		remainderOfLine := ""
+		if insertPos < len(currLine) {
+			remainderOfLine = currLine[insertPos+1:]
+		}
+		
+		// Set the first line with the content before cursor + first part of yanked text
+		if insertPos >= len(currLine) {
+			model.buffer.setLine(model.cursor.Row, currLine+firstLine)
+		} else {
+			model.buffer.setLine(model.cursor.Row, 
+				currLine[:insertPos+1]+firstLine)
+		}
+		
+		// Insert middle lines as new lines
+		row := model.cursor.Row
+		for i := 1; i < len(lines)-1; i++ {
+			model.buffer.insertLine(row+i, lines[i])
+		}
+		
+		// Handle the last line separately
+		if len(lines) > 1 {
+			lastLine := lines[len(lines)-1]
+			model.buffer.insertLine(row+len(lines)-1, lastLine+remainderOfLine)
+		} else {
+			// If only one line, append the remainder to the current line
+			currLineContent := model.buffer.Line(model.cursor.Row)
+			model.buffer.setLine(model.cursor.Row, currLineContent+remainderOfLine)
+		}
+		
+		// Position cursor at the end of the last inserted line
+		model.cursor.Row = row + len(lines) - 1
+		if len(lines) > 1 {
+			// For multi-line pastes, position at the end of the last line's content
+			model.cursor.Col = len(lines[len(lines)-1])
+		} else {
+			// For single line pastes, position at the end of what was pasted
+			model.cursor.Col = insertPos + len(firstLine) + 1
+		}
+		
+		if model.mode != ModeInsert && model.cursor.Col > 0 {
+			model.cursor.Col--
+		}
 	} else {
-		model.buffer.setLine(model.cursor.Row,
-			currLine[:insertPos+1]+model.yankBuffer+currLine[insertPos+1:])
+		// Single-line paste - original behavior
+		if insertPos >= len(currLine) {
+			model.buffer.setLine(model.cursor.Row, currLine+model.yankBuffer)
+		} else {
+			model.buffer.setLine(model.cursor.Row,
+				currLine[:insertPos+1]+model.yankBuffer+currLine[insertPos+1:])
+		}
+
+		model.cursor.Col = insertPos + len(model.yankBuffer) + 1
+		if model.mode != ModeInsert && model.cursor.Col > 0 {
+			model.cursor.Col--
+		}
 	}
 
-	model.cursor.Col = insertPos + len(model.yankBuffer) + 1
-	if model.mode != ModeInsert && model.cursor.Col > 0 {
-		model.cursor.Col--
-	}
-
+	model.ensureCursorVisible()
 	return nil
 }
 
@@ -592,18 +647,62 @@ func pasteBefore(model *editorModel) tea.Cmd {
 
 	model.buffer.saveUndoState(model.cursor)
 
+	// Line-wise paste
 	if strings.HasPrefix(model.yankBuffer, "\n") {
 		return pasteLineBefore(model)
 	}
 
+	// Character-wise paste
 	currLine := model.buffer.Line(model.cursor.Row)
 	insertPos := model.cursor.Col
 
-	model.buffer.setLine(model.cursor.Row,
-		currLine[:insertPos]+model.yankBuffer+currLine[insertPos:])
+	// Check if the yanked text contains newlines (multi-line character-wise yank)
+	if strings.Contains(model.yankBuffer, "\n") {
+		// Split the yanked text by newlines
+		lines := strings.Split(model.yankBuffer, "\n")
+		
+		// Handle the first line - insert at cursor position in current line
+		firstLine := lines[0]
+		newFirstLine := currLine[:insertPos] + firstLine
+		model.buffer.setLine(model.cursor.Row, newFirstLine)
+		
+		// If this is the last line, append the remainder of the original line
+		if len(lines) == 1 {
+			model.buffer.setLine(model.cursor.Row, newFirstLine + currLine[insertPos:])
+		} else {
+			// Handle the last line - combine with remainder of current line
+			lastLineIndex := len(lines) - 1
+			lastLine := lines[lastLineIndex] + currLine[insertPos:]
+			
+			// Insert middle and last lines as new lines
+			row := model.cursor.Row
+			for i := 1; i < lastLineIndex; i++ {
+				model.buffer.insertLine(row+i, lines[i])
+			}
+			model.buffer.insertLine(row+lastLineIndex, lastLine)
+		}
+		
+		// Position cursor appropriately depending on where the paste ended
+		if len(lines) > 1 {
+			// For multi-line pastes in pasteBefore, cursor stays at the insertion point
+			model.cursor.Col = insertPos + len(firstLine)
+		} else {
+			// For single line pastes, position at the end of what was pasted
+			model.cursor.Col = insertPos + len(firstLine)
+		}
+		
+		if model.mode != ModeInsert && model.cursor.Col > 0 {
+			model.cursor.Col--
+		}
+	} else {
+		// Single-line paste - original behavior
+		model.buffer.setLine(model.cursor.Row,
+			currLine[:insertPos]+model.yankBuffer+currLine[insertPos:])
 
-	model.cursor.Col = max(insertPos+len(model.yankBuffer)-1, 0)
+		model.cursor.Col = max(insertPos+len(model.yankBuffer)-1, 0)
+	}
 
+	model.ensureCursorVisible()
 	return nil
 }
 
