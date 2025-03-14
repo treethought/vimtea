@@ -16,6 +16,10 @@ import (
 // EditorMode represents the current mode of the editor
 type EditorMode int
 
+type EditorModeMsg struct {
+	Mode EditorMode
+}
+
 const (
 	// ModeNormal is the default mode for navigation and commands
 	ModeNormal EditorMode = iota
@@ -53,7 +57,7 @@ type Editor interface {
 	GetMode() EditorMode
 
 	// SetMode changes the current editor mode
-	SetMode(mode EditorMode)
+	SetMode(mode EditorMode) tea.Cmd
 
 	// SetStatusMessage sets the status message displayed in the status bar
 	SetStatusMessage(msg string) tea.Cmd
@@ -491,8 +495,22 @@ func (m *editorModel) GetMode() EditorMode {
 }
 
 // SetMode changes the current editor mode
-func (m *editorModel) SetMode(mode EditorMode) {
-	m.mode = mode
+func (m *editorModel) SetMode(mode EditorMode) tea.Cmd {
+	cmds := []tea.Cmd{
+		func() tea.Msg {
+			return EditorModeMsg{Mode: mode}
+		},
+	}
+	var cmd tea.Cmd
+	if mode == ModeVisual {
+		cmd = beginVisualSelection(m)
+	} else {
+		cmd = switchMode(m, mode)
+	}
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return tea.Batch(cmds...)
 }
 
 // SetStatusMessage sets the status message shown in the status bar
