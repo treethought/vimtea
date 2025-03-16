@@ -61,6 +61,9 @@ type Editor interface {
 
 	// SetStatusMessage sets the status message displayed in the status bar
 	SetStatusMessage(msg string) tea.Cmd
+
+	// SetSize updates the editor's dimensions when the terminal window is resized
+	SetSize(width, height int) (tea.Model, tea.Cmd)
 }
 
 // editorModel implements the Editor interface and maintains the editor state
@@ -69,6 +72,7 @@ type editorModel struct {
 	cursor     Cursor  // Current cursor position
 	yankBuffer string  // Clipboard
 	lastOp     string  // Last operation performed (for repeating with .)
+	fullScreen bool    // Whether to use the full terminal screen
 
 	mode              EditorMode // Current mode
 	enableCommandMode bool       // Whether command mode is enabled
@@ -124,6 +128,7 @@ type options struct {
 	SelectedStyle          lipgloss.Style // Style for selected text
 	FileName               string         // Filename for syntax highlighting
 	RelativeNumbers        bool           // Whether to show relative line numbers
+	FullScreen             bool           // Whether to use the full terminal screen
 }
 
 // EditorOption is a function that modifies the editor options
@@ -146,6 +151,7 @@ func NewEditor(opts ...EditorOption) Editor {
 		SelectedStyle:          selectedStyle,
 		FileName:               "",
 		RelativeNumbers:        false,
+		FullScreen:             false,
 	}
 
 	// Apply all options
@@ -156,6 +162,7 @@ func NewEditor(opts ...EditorOption) Editor {
 	m := &editorModel{
 		buffer:                 newBuffer(options.Content),
 		mode:                   ModeNormal,
+		fullScreen:             options.FullScreen,
 		enableCommandMode:      options.EnableCommandMode,
 		enableStatusBar:        options.EnableStatusBar,
 		cursor:                 newCursor(0, 0),
@@ -208,9 +215,10 @@ func (m *editorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cursorBlink = true
 		m.lastBlinkTime = time.Now()
 		return m.handleKeypress(msg)
-
 	case tea.WindowSizeMsg:
-		return m.handleResize(msg)
+		if m.fullScreen {
+			return m.SetSize(msg.Width, msg.Height)
+		}
 
 	case cursorBlinkMsg:
 		// Handle cursor blinking animation
@@ -280,22 +288,22 @@ func (m *editorModel) GetSelectionBoundary() (Cursor, Cursor) {
 	return start, end
 }
 
-// handleResize updates the editor's dimensions when the terminal window is resized
-func (m *editorModel) handleResize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
-	m.width = msg.Width
-	m.height = msg.Height
+// SetSize updates the editor's dimensions when the terminal window is resized
+func (m *editorModel) SetSize(width, height int) (tea.Model, tea.Cmd) {
+	m.width = width
+	m.height = height
 
 	// Adjust height for status bar
 	if m.enableStatusBar {
-		m.height = msg.Height - 2
+		m.height = height - 2
 	}
 
 	// Update viewport dimensions
-	m.viewport.Width = msg.Width
-	m.viewport.Height = msg.Height
+	m.viewport.Width = width
+	m.viewport.Height = height
 
 	if m.enableStatusBar {
-		m.viewport.Height = msg.Height - 2
+		m.viewport.Height = height - 2
 	}
 
 	// Ensure cursor is visible after resize
@@ -630,5 +638,11 @@ func WithFileName(fileName string) EditorOption {
 func WithRelativeNumbers(enable bool) EditorOption {
 	return func(o *options) {
 		o.RelativeNumbers = enable
+	}
+}
+
+func WithFullScreen() EditorOption {
+	return func(o *options) {
+		o.FullScreen = true
 	}
 }

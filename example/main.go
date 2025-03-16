@@ -43,6 +43,7 @@ func main() {
 	editor := vimtea.NewEditor(
 		vimtea.WithContent(string(buf)),
 		vimtea.WithFileName("example/main.go"),
+		vimtea.WithFullScreen(),
 	)
 
 	// Add a custom key binding for quitting with Ctrl+C
