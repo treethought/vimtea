@@ -144,7 +144,7 @@ func NewEditor(opts ...EditorOption) Editor {
 		EnableCommandMode:      true,
 		EnableStatusBar:        true,
 		DefaultSyntaxTheme:     "catppuccin-macchiato",
-		BlinkInterval:          530 * time.Millisecond,
+		BlinkInterval:          1 * time.Second,
 		TextStyle:              textStyle,
 		LineNumberStyle:        lineNumberStyle,
 		CurrentLineNumberStyle: currentLineNumberStyle,
@@ -197,7 +197,7 @@ func NewEditor(opts ...EditorOption) Editor {
 
 // cursorBlinkCmd creates a command that triggers cursor blinking animation
 func cursorBlinkCmd() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Second*1, func(t time.Time) tea.Msg {
 		return cursorBlinkMsg(t)
 	})
 }

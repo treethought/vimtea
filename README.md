@@ -58,7 +58,7 @@ import (
 
 func main() {
     // Create a new editor with default options
-    editor := vimtea.NewEditor()
+    editor := vimtea.NewEditor(vimtea.WithFullScreen())
 
     // Run the editor
     p := tea.NewProgram(editor)
@@ -90,6 +90,7 @@ func main() {
     editor := vimtea.NewEditor(
         vimtea.WithContent(content),
         vimtea.WithFileName("example.txt"),
+        vimtea.WithFullScreen(),
     )
 
     p := tea.NewProgram(editor)
@@ -113,7 +114,7 @@ import (
 
 func main() {
     // Create editor
-    editor := vimtea.NewEditor()
+    editor := vimtea.NewEditor(vimtea.WithFullScreen())
 
     // Add custom binding
     editor.AddBinding(vimtea.KeyBinding{
@@ -146,7 +147,7 @@ import (
 
 func main() {
     // Create editor
-    editor := vimtea.NewEditor()
+    editor := vimtea.NewEditor(vimtea.WithFullScreen())
 
     // Add custom command
     editor.AddCommand("mysave", func(b vimtea.Buffer, args []string) tea.Cmd {
@@ -196,6 +197,7 @@ func main() {
         vimtea.WithCurrentLineNumberStyle(currentLineStyle),
         vimtea.WithCursorStyle(cursorStyle),
         vimtea.WithRelativeNumbers(true),
+        vimtea.WithFullScreen(),
     )
 
     p := tea.NewProgram(editor)
