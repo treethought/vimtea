@@ -64,6 +64,9 @@ type Editor interface {
 
 	// SetSize updates the editor's dimensions when the terminal window is resized
 	SetSize(width, height int) (tea.Model, tea.Cmd)
+
+	// Tick sends a tick message to the editor
+	Tick() tea.Cmd
 }
 
 // editorModel implements the Editor interface and maintains the editor state
@@ -519,6 +522,10 @@ func (m *editorModel) SetMode(mode EditorMode) tea.Cmd {
 		cmds = append(cmds, cmd)
 	}
 	return tea.Batch(cmds...)
+}
+
+func (m *editorModel) Tick() tea.Cmd {
+	return cursorBlinkCmd()
 }
 
 // SetStatusMessage sets the status message shown in the status bar
