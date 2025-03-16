@@ -34,7 +34,7 @@ func TestModelInitialization(t *testing.T) {
 }
 
 func TestModelUpdate(t *testing.T) {
-	editor := NewEditor()
+	editor := NewEditor(WithFullScreen())
 	model := editor.(*editorModel)
 
 	// Test key message handling
