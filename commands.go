@@ -48,7 +48,9 @@ func switchMode(model *editorModel, newMode EditorMode) tea.Cmd {
 		model.commandBuffer = ""
 	}
 
-	return nil
+	return func() tea.Msg {
+		return EditorModeMsg{newMode}
+	}
 }
 
 func registerBindings(m *editorModel) {
@@ -576,28 +578,28 @@ func pasteAfter(model *editorModel) tea.Cmd {
 	if strings.Contains(model.yankBuffer, "\n") {
 		// Split the yanked text by newlines
 		lines := strings.Split(model.yankBuffer, "\n")
-		
+
 		// Handle the first line - insert at cursor position in current line
 		firstLine := lines[0]
 		remainderOfLine := ""
 		if insertPos < len(currLine) {
 			remainderOfLine = currLine[insertPos+1:]
 		}
-		
+
 		// Set the first line with the content before cursor + first part of yanked text
 		if insertPos >= len(currLine) {
 			model.buffer.setLine(model.cursor.Row, currLine+firstLine)
 		} else {
-			model.buffer.setLine(model.cursor.Row, 
+			model.buffer.setLine(model.cursor.Row,
 				currLine[:insertPos+1]+firstLine)
 		}
-		
+
 		// Insert middle lines as new lines
 		row := model.cursor.Row
 		for i := 1; i < len(lines)-1; i++ {
 			model.buffer.insertLine(row+i, lines[i])
 		}
-		
+
 		// Handle the last line separately
 		if len(lines) > 1 {
 			lastLine := lines[len(lines)-1]
@@ -607,7 +609,7 @@ func pasteAfter(model *editorModel) tea.Cmd {
 			currLineContent := model.buffer.Line(model.cursor.Row)
 			model.buffer.setLine(model.cursor.Row, currLineContent+remainderOfLine)
 		}
-		
+
 		// Position cursor at the end of the last inserted line
 		model.cursor.Row = row + len(lines) - 1
 		if len(lines) > 1 {
@@ -617,7 +619,7 @@ func pasteAfter(model *editorModel) tea.Cmd {
 			// For single line pastes, position at the end of what was pasted
 			model.cursor.Col = insertPos + len(firstLine) + 1
 		}
-		
+
 		if model.mode != ModeInsert && model.cursor.Col > 0 {
 			model.cursor.Col--
 		}
@@ -660,20 +662,20 @@ func pasteBefore(model *editorModel) tea.Cmd {
 	if strings.Contains(model.yankBuffer, "\n") {
 		// Split the yanked text by newlines
 		lines := strings.Split(model.yankBuffer, "\n")
-		
+
 		// Handle the first line - insert at cursor position in current line
 		firstLine := lines[0]
 		newFirstLine := currLine[:insertPos] + firstLine
 		model.buffer.setLine(model.cursor.Row, newFirstLine)
-		
+
 		// If this is the last line, append the remainder of the original line
 		if len(lines) == 1 {
-			model.buffer.setLine(model.cursor.Row, newFirstLine + currLine[insertPos:])
+			model.buffer.setLine(model.cursor.Row, newFirstLine+currLine[insertPos:])
 		} else {
 			// Handle the last line - combine with remainder of current line
 			lastLineIndex := len(lines) - 1
 			lastLine := lines[lastLineIndex] + currLine[insertPos:]
-			
+
 			// Insert middle and last lines as new lines
 			row := model.cursor.Row
 			for i := 1; i < lastLineIndex; i++ {
@@ -681,7 +683,7 @@ func pasteBefore(model *editorModel) tea.Cmd {
 			}
 			model.buffer.insertLine(row+lastLineIndex, lastLine)
 		}
-		
+
 		// Position cursor appropriately depending on where the paste ended
 		if len(lines) > 1 {
 			// For multi-line pastes in pasteBefore, cursor stays at the insertion point
@@ -690,7 +692,7 @@ func pasteBefore(model *editorModel) tea.Cmd {
 			// For single line pastes, position at the end of what was pasted
 			model.cursor.Col = insertPos + len(firstLine)
 		}
-		
+
 		if model.mode != ModeInsert && model.cursor.Col > 0 {
 			model.cursor.Col--
 		}
