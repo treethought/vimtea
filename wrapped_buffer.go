@@ -67,3 +67,13 @@ func (w *wrappedBuffer) CanUndo() bool {
 func (w *wrappedBuffer) CanRedo() bool {
 	return w.m.buffer.canRedo()
 }
+
+// Clear removes all content from the buffer and resets to empty state
+func (w *wrappedBuffer) Clear() tea.Cmd {
+	w.m.buffer.saveUndoState(w.m.cursor)
+	w.m.buffer.clear()
+	w.m.cursor = newCursor(0, 0)
+	return func() tea.Msg {
+		return nil
+	}
+}

@@ -124,6 +124,8 @@ func registerBindings(m *editorModel) {
 	m.registry.Add("backspace", commandBackspace, ModeCommand, "Backspace")
 
 	m.commands.Register("zr", toggleRelativeLineNumbers)
+	m.commands.Register("clear", clearBuffer)
+	m.commands.Register("reset", resetEditor)
 }
 
 func toggleRelativeLineNumbers(model *editorModel) tea.Cmd {
@@ -133,6 +135,17 @@ func toggleRelativeLineNumbers(model *editorModel) tea.Cmd {
 	} else {
 		return SetStatusMsg("relative line numbers: off")
 	}
+}
+
+func clearBuffer(model *editorModel) tea.Cmd {
+	model.buffer.saveUndoState(model.cursor)
+	model.buffer.clear()
+	model.cursor = newCursor(0, 0)
+	return SetStatusMsg("buffer cleared")
+}
+
+func resetEditor(model *editorModel) tea.Cmd {
+	return model.Reset()
 }
 
 func moveToFirstNonWhitespace(model *editorModel) tea.Cmd {

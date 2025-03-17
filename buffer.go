@@ -44,6 +44,9 @@ type Buffer interface {
 
 	// CanRedo returns whether there are changes that can be redone
 	CanRedo() bool
+	
+	// Clear removes all content from the buffer and resets to empty state
+	Clear() tea.Cmd
 }
 
 // buffer implements the Buffer interface
@@ -163,6 +166,11 @@ func (b *buffer) deleteLine(idx int) string {
 	}
 
 	return line
+}
+
+// clear removes all content from the buffer and resets to a single empty line
+func (b *buffer) clear() {
+	b.lines = []string{""}
 }
 
 // insertAt inserts text at the specified position

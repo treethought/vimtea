@@ -67,15 +67,19 @@ type Editor interface {
 
 	// Tick sends a tick message to the editor
 	Tick() tea.Cmd
+	
+	// Reset restores the editor to its initial state
+	Reset() tea.Cmd
 }
 
 // editorModel implements the Editor interface and maintains the editor state
 type editorModel struct {
-	buffer     *buffer // Text buffer with undo/redo
-	cursor     Cursor  // Current cursor position
-	yankBuffer string  // Clipboard
-	lastOp     string  // Last operation performed (for repeating with .)
-	fullScreen bool    // Whether to use the full terminal screen
+	buffer         *buffer // Text buffer with undo/redo
+	cursor         Cursor  // Current cursor position
+	yankBuffer     string  // Clipboard
+	lastOp         string  // Last operation performed (for repeating with .)
+	fullScreen     bool    // Whether to use the full terminal screen
+	initialContent string  // Initial content used to create the editor
 
 	mode              EditorMode // Current mode
 	enableCommandMode bool       // Whether command mode is enabled
@@ -188,6 +192,7 @@ func NewEditor(opts ...EditorOption) Editor {
 		yankHighlight: newYankHighlight(),
 		registry:      newBindingRegistry(),
 		commands:      newCommandRegistry(),
+		initialContent: options.Content,
 	}
 
 	// Register default key bindings
@@ -543,6 +548,35 @@ func SetStatusMsg(msg string) tea.Cmd {
 	return func() tea.Msg {
 		return statusMessageMsg(msg)
 	}
+}
+
+// Reset restores the editor to its initial state
+func (m *editorModel) Reset() tea.Cmd {
+	// Save current state for undo if needed
+	m.buffer.saveUndoState(m.cursor)
+	
+	// Reset buffer to initial content
+	m.buffer = newBuffer(m.initialContent)
+	
+	// Reset cursor position
+	m.cursor = newCursor(0, 0)
+	
+	// Reset editor state
+	m.yankBuffer = ""
+	m.keySequence = []string{}
+	m.mode = ModeNormal
+	m.commandBuffer = ""
+	m.desiredCol = 0
+	m.visualStart = newCursor(0, 0)
+	m.isVisualLine = false
+	m.countPrefix = 1
+	
+	// Reset viewport
+	m.viewport.YOffset = 0
+	m.ensureCursorVisible()
+	
+	// Return a command that updates the status message
+	return SetStatusMsg("Editor reset")
 }
 
 // statusMessageMsg is a message type for updating the status message
