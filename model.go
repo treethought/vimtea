@@ -4,6 +4,7 @@
 package vimtea
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"golang.design/x/clipboard"
 )
 
 // EditorMode represents the current mode of the editor
@@ -67,7 +70,7 @@ type Editor interface {
 
 	// Tick sends a tick message to the editor
 	Tick() tea.Cmd
-	
+
 	// Reset restores the editor to its initial state
 	Reset() tea.Cmd
 }
@@ -166,6 +169,8 @@ func NewEditor(opts ...EditorOption) Editor {
 		opt(options)
 	}
 
+	cpErr := clipboard.Init()
+
 	m := &editorModel{
 		buffer:                 newBuffer(options.Content),
 		mode:                   ModeNormal,
@@ -188,12 +193,20 @@ func NewEditor(opts ...EditorOption) Editor {
 		relativeNumbers:        options.RelativeNumbers,
 		countPrefix:            1,
 
-		highlighter:   newSyntaxHighlighter(options.DefaultSyntaxTheme, options.FileName),
-		yankHighlight: newYankHighlight(),
-		registry:      newBindingRegistry(),
-		commands:      newCommandRegistry(),
+		highlighter:    newSyntaxHighlighter(options.DefaultSyntaxTheme, options.FileName),
+		yankHighlight:  newYankHighlight(),
+		registry:       newBindingRegistry(),
+		commands:       newCommandRegistry(),
 		initialContent: options.Content,
 	}
+	go func() {
+		if cpErr != nil {
+			ch := clipboard.Watch(context.Background(), clipboard.FmtText)
+			for data := range ch {
+				m.yankBuffer = string(data)
+			}
+		}
+	}()
 
 	// Register default key bindings
 	registerBindings(m)
@@ -554,13 +567,13 @@ func SetStatusMsg(msg string) tea.Cmd {
 func (m *editorModel) Reset() tea.Cmd {
 	// Save current state for undo if needed
 	m.buffer.saveUndoState(m.cursor)
-	
+
 	// Reset buffer to initial content
 	m.buffer = newBuffer(m.initialContent)
-	
+
 	// Reset cursor position
 	m.cursor = newCursor(0, 0)
-	
+
 	// Reset editor state
 	m.yankBuffer = ""
 	m.keySequence = []string{}
@@ -570,11 +583,11 @@ func (m *editorModel) Reset() tea.Cmd {
 	m.visualStart = newCursor(0, 0)
 	m.isVisualLine = false
 	m.countPrefix = 1
-	
+
 	// Reset viewport
 	m.viewport.YOffset = 0
 	m.ensureCursorVisible()
-	
+
 	// Return a command that updates the status message
 	return SetStatusMsg("Editor reset")
 }
