@@ -73,6 +73,7 @@ func registerBindings(m *editorModel) {
 	m.registry.Add("yy", yankLine, ModeNormal, "Yank line")
 	m.registry.Add("dd", deleteLine, ModeNormal, "Delete line")
 	m.registry.Add("D", deleteToEndOfLine, ModeNormal, "Delete to end of line")
+	m.registry.Add("C", changeToEndOfLine, ModeNormal, "Change to end of line")
 	m.registry.Add("p", pasteAfter, ModeNormal, "Paste after cursor")
 	m.registry.Add("P", pasteBefore, ModeNormal, "Paste before cursor")
 
@@ -160,6 +161,11 @@ func moveToFirstNonWhitespace(model *editorModel) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+func changeToEndOfLine(model *editorModel) tea.Cmd {
+	_ = deleteToEndOfLine(model)
+	return enterModeInsert(model)
 }
 
 func deleteToEndOfLine(model *editorModel) tea.Cmd {
