@@ -60,6 +60,7 @@ func registerBindings(m *editorModel) {
 	m.registry.Add("v", beginVisualSelection, ModeNormal, "Enter visual mode")
 	m.registry.Add("V", beginVisualLineSelection, ModeNormal, "Enter visual line mode")
 	m.registry.Add("x", deleteCharAtCursor, ModeNormal, "Delete character at cursor")
+	m.registry.Add("r", beginReplaceAtCursor, ModeNormal, "Delete character at cursor")
 	if m.enableCommandMode {
 		m.registry.Add(":", enterModeCommand, ModeNormal, "Enter command mode")
 	}
@@ -255,6 +256,17 @@ func openLineAbove(model *editorModel) tea.Cmd {
 	model.cursor.Col = 0
 	model.ensureCursorVisible()
 	return switchMode(model, ModeInsert)
+}
+
+func replaceCurrentCharacter(model *editorModel, char string) (tea.Model, tea.Cmd) {
+	// perform replacement
+	deleteCharAtCursor(model)
+	insertCharacter(model, char)
+
+	// restore cursor to position of replacement
+	// safe to not check len because insertCharacter increments cursor col
+	model.cursor.Col--
+	return model, nil
 }
 
 func insertCharacter(model *editorModel, char string) (tea.Model, tea.Cmd) {
@@ -515,6 +527,13 @@ func redo(model *editorModel) tea.Cmd {
 	return model.buffer.redo(model.cursor)
 }
 
+func beginReplaceAtCursor(model *editorModel) tea.Cmd {
+	deleteCharAtCursor(model)
+	// insert at current position
+	model.buffer.insertAt(model.cursor.Row, model.cursor.Col, " ")
+	model.waitReplace = true
+	return enterModeInsert(model)
+}
 func deleteCharAtCursor(model *editorModel) tea.Cmd {
 	model.buffer.saveUndoState(model.cursor)
 
