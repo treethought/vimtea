@@ -259,10 +259,15 @@ func openLineAbove(model *editorModel) tea.Cmd {
 }
 
 func replaceCurrentCharacter(model *editorModel, char string) (tea.Model, tea.Cmd) {
+	model.buffer.saveUndoState(model.cursor)
 	// perform replacement
 	deleteCharAtCursor(model)
 	insertCharacter(model, char)
 
+	// remove delete/insert undo states
+	if len(model.buffer.undoStack) > 1 {
+		model.buffer.undoStack = model.buffer.undoStack[:len(model.buffer.undoStack)-2]
+	}
 	// restore cursor to position of replacement
 	// safe to not check len because insertCharacter increments cursor col
 	model.cursor.Col--
@@ -529,11 +534,13 @@ func redo(model *editorModel) tea.Cmd {
 
 func beginReplaceAtCursor(model *editorModel) tea.Cmd {
 	deleteCharAtCursor(model)
-	// insert at current position
 	model.buffer.insertAt(model.cursor.Row, model.cursor.Col, " ")
+  // mark waitReplace to be handled in next insert keymsg
 	model.waitReplace = true
 	return enterModeInsert(model)
+
 }
+
 func deleteCharAtCursor(model *editorModel) tea.Cmd {
 	model.buffer.saveUndoState(model.cursor)
 
