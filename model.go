@@ -56,6 +56,9 @@ type Editor interface {
 	// GetBuffer returns the current buffer
 	GetBuffer() Buffer
 
+	// GetCursor returns the current cursor position
+	GetCursor() Cursor
+
 	// GetMode returns the current editor mode
 	GetMode() EditorMode
 
@@ -499,6 +502,10 @@ func (m *editorModel) handlePrefixKeypress(mode EditorMode) func(msg tea.KeyMsg)
 // GetBuffer returns a wrapped buffer that provides the Buffer interface
 func (m *editorModel) GetBuffer() Buffer {
 	return &wrappedBuffer{m}
+}
+
+func (m *editorModel) GetCursor() Cursor {
+	return m.cursor.Clone()
 }
 
 // AddBinding registers a new key binding with the editor
