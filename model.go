@@ -59,6 +59,10 @@ type Editor interface {
 	// GetCursor returns the current cursor position
 	GetCursor() Cursor
 
+	// GetSelectionBoundary returns the start and end cursors of the current selection
+	// in visual mode. It ensures the start cursor is always before the end cursor.
+	GetSelectionBoundary() (Cursor, Cursor)
+
 	// GetMode returns the current editor mode
 	GetMode() EditorMode
 
