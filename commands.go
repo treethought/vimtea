@@ -80,9 +80,12 @@ func registerBindings(m *editorModel) {
 
 	m.registry.Add("u", undo, ModeNormal, "Undo")
 	m.registry.Add("ctrl+r", redo, ModeNormal, "Redo")
-	m.registry.Add("diw", deleteInnerWord, ModeNormal, "Delete inner word")
 	m.registry.Add("yiw", yankInnerWord, ModeNormal, "Yank inner word")
+  // TODO: cw vs ciw differences
+	m.registry.Add("diw", deleteInnerWord, ModeNormal, "Delete inner word")
+	m.registry.Add("dw", deleteInnerWord, ModeNormal, "Delete inner word")
 	m.registry.Add("ciw", changeInnerWord, ModeNormal, "Change inner word")
+	m.registry.Add("cw", changeInnerWord, ModeNormal, "Change word")
 
 	for _, mode := range []EditorMode{ModeNormal, ModeVisual} {
 		m.registry.Add("h", moveCursorLeft, mode, "Move cursor left")
@@ -535,7 +538,7 @@ func redo(model *editorModel) tea.Cmd {
 func beginReplaceAtCursor(model *editorModel) tea.Cmd {
 	deleteCharAtCursor(model)
 	model.buffer.insertAt(model.cursor.Row, model.cursor.Col, " ")
-  // mark waitReplace to be handled in next insert keymsg
+	// mark waitReplace to be handled in next insert keymsg
 	model.waitReplace = true
 	return enterModeInsert(model)
 
